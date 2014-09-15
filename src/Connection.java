@@ -49,7 +49,7 @@ public class Connection implements Runnable {
 		try {
 			handleClient();
 		} catch (Exception e) {
-			e.printStackTrace();
+			//e.printStackTrace();
 			System.out.println("connection to client: "+CLIENT_ID+" ended unexpectedly.");
 		}
 	}
@@ -64,25 +64,25 @@ public class Connection implements Runnable {
 		
 		switch (this.service_type) {
 		case ECHO_SERVER:
-			 new EchoServer(socket,CLIENT_ID, mode).start();
+			new EchoServer(socket,CLIENT_ID, mode).start();
 			break;
 		case FTP_SERVER:
-			new FtpServer(socket, CLIENT_ID, mode).start();
-			break;
+			//new FtpServer(socket, CLIENT_ID, mode).start();
+			//break;
 		case ARQ_SERVER:
-			new ArqServer(socket,CLIENT_ID,mode).start();
-			break;
+			//new ArqServer(socket,CLIENT_ID,mode).start();
+			//break;
 		case CC_SERVER:
-			new CcServer(socket, CLIENT_ID, mode).start();
-			break;
+			//new CcServer(socket, CLIENT_ID, mode).start();
+			//break;
 		case ROUTING_SERVER:
-			new RoutingServer(socket, CLIENT_ID, mode).start();
-			break;
+			//new RoutingServer(socket, CLIENT_ID, mode).start();
+			//break;
 		case PROJECT_SERVER:
-			new ProjectServer(socket,CLIENT_ID,mode).start();
-			break;
+			//new ProjectServer(socket,CLIENT_ID,mode).start();
+			//break;
 		default:
-			System.out.println("Unkonwn type of service requested.\r\n Service ended.");
+			System.out.println("The requested service is either unkonwn or not yet supported.\r\n Service ended.");
 			break;
 		}
 		socket.close();

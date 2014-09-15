@@ -17,7 +17,7 @@ public class MainClass {
 	public static void main(String[] args) {
 		//loading the default values.
 		port=9876;
-		Connection.ServiceType servicetype=Connection.ServiceType.PROJECT_SERVER;
+		Connection.ServiceType servicetype=Connection.ServiceType.ECHO_SERVER;
 		Connection.Mode mode=Connection.Mode.VERBOSE;
 		
 		//Parsing the input arguments
