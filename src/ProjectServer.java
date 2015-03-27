@@ -28,7 +28,7 @@ public class ProjectServer {
 	private final String CRLF="\r\n";
 	private BufferedReader reader;
 	private DataOutputStream writer;
-	private Connection.Mode mode;
+	private ClientConnection.Mode mode;
 	private Socket socket;
 	private final long CLIENT_ID;
 	private String user_name="";
@@ -42,10 +42,10 @@ public class ProjectServer {
 	
 
 	public ProjectServer() throws IOException {
-		this(null,-1,Connection.Mode.SILENT);
+		this(null,-1,ClientConnection.Mode.SILENT);
 	}
 
-	public ProjectServer(Socket socket,long client_id, Connection.Mode mode) throws IOException
+	public ProjectServer(Socket socket,long client_id, ClientConnection.Mode mode) throws IOException
 	{
 		this.mode=mode;
 		this.socket=socket;
@@ -237,7 +237,9 @@ public class ProjectServer {
 			if(received == 1)
 				tic=System.currentTimeMillis();
 			long previous_time=rcv_times[lastAck%bandwidth];
-			rcv_times[lastAck%bandwidth]=System.currentTimeMillis();
+			//TODO: if the packet sequence is not correct, we won't drop it now. maybe we should time another way to drop them if sent fast.
+			if(received == lastAck +1)
+				rcv_times[lastAck%bandwidth]=System.currentTimeMillis();
 			//log("previous: "+ previous_time+" now: "+rcv_times[lastAck%bandwidth]+ " diff: "+ (rcv_times[lastAck%bandwidth]-previous_time));
 			//log("last ack: "+lastAck+ " time diff: "+ (rcv_times[lastAck%bandwidth]-previous_time) );
 			//randomError = randomGenerator.nextInt(100) + 1;
@@ -302,7 +304,7 @@ public class ProjectServer {
 		}
 		else
 		{
-			log("INCORRECT answer. The transmission rate was too slow.");			
+			log("INCORRECT answer. The transmission rate was too slow/fast.");			
 		}
 		return score;
 	}
@@ -451,7 +453,7 @@ public class ProjectServer {
 	 * @param str the string to log (show in the standard output or write to a file.
 	 * @param lvl the level of importance.
 	 */
-	private void log(String str,Connection.Mode lvl) throws IOException
+	private void log(String str,ClientConnection.Mode lvl) throws IOException
 	{
 		DateFormat timeFormat = new SimpleDateFormat("[HH:mm:ss] ");
 

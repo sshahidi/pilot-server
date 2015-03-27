@@ -20,7 +20,7 @@ public class ArqServer {
 	private final String CRLF="\r\n";
 	private BufferedReader reader;
 	private DataOutputStream writer;
-	private Connection.Mode mode;
+	private ClientConnection.Mode mode;
 	private Socket socket;
 	private final long CLIENT_ID;
 	private String user_name="";
@@ -30,11 +30,11 @@ public class ArqServer {
 
 	//constructors
 	public ArqServer() throws IOException {
-		this(null,-1,Connection.Mode.SILENT);
+		this(null,-1,ClientConnection.Mode.SILENT);
 	}
 
 
-	public ArqServer(Socket socket, long Client_id,Connection.Mode mode) throws IOException
+	public ArqServer(Socket socket, long Client_id,ClientConnection.Mode mode) throws IOException
 	{
 		this.socket =socket;
 		this.CLIENT_ID=Client_id;
@@ -139,7 +139,7 @@ public class ArqServer {
 	 * @param str the string to log (show in the standard output or write to a file.
 	 * @param lvl the level of importance.
 	 */
-	private void log(String str,Connection.Mode lvl) throws IOException
+	private void log(String str,ClientConnection.Mode lvl) throws IOException
 	{
 		DateFormat timeFormat = new SimpleDateFormat("[HH:mm:ss] ");
 

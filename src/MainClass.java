@@ -17,8 +17,8 @@ public class MainClass {
 	public static void main(String[] args) {
 		//loading the default values.
 		port=9876;
-		Connection.ServiceType servicetype=Connection.ServiceType.ECHO_SERVER;
-		Connection.Mode mode=Connection.Mode.VERBOSE;
+		ClientConnection.ServiceType servicetype=ClientConnection.ServiceType.ECHO_SERVER;
+		ClientConnection.Mode mode=ClientConnection.Mode.VERBOSE;
 		
 		//Parsing the input arguments
 		try
@@ -26,9 +26,9 @@ public class MainClass {
 			if(args.length>=1)
 				port=Integer.parseInt(args[0]);
 			if (args.length>=2)
-				servicetype = Connection.ServiceType.valueOf(args[1]);
+				servicetype = ClientConnection.ServiceType.valueOf(args[1]);
 			if (args.length>=3)
-				mode = Connection.Mode.valueOf(args[2]);
+				mode = ClientConnection.Mode.valueOf(args[2]);
 		}
 		catch (Exception e) {
 			System.out.println("Wrong input arguments.");
@@ -67,7 +67,7 @@ public class MainClass {
 				Socket socket=ss.accept();
 				System.out.println("request received. request number: " + request_num + " client: "+ socket.getRemoteSocketAddress().toString());
 				
-				Connection connection=new Connection(socket,servicetype,mode,request_num);
+				ClientConnection connection=new ClientConnection(socket,servicetype,mode,request_num);
 				Thread thread=new Thread(connection); //the thread object that will handle each client using the connection class.
 				thread.start();
 				request_num++;

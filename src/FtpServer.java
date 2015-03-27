@@ -27,7 +27,7 @@ public class FtpServer
 	private final String CRLF="\r\n";
 	private BufferedReader reader;
 	private DataOutputStream writer;
-	private Connection.Mode mode;
+	private ClientConnection.Mode mode;
 	private Socket control_socket;
 	private Socket data_socket;
 	private final long CLIENT_ID;
@@ -39,10 +39,10 @@ public class FtpServer
 
 	public FtpServer()  throws IOException 
 	{
-		this(null,-1,Connection.Mode.SILENT);
+		this(null,-1,ClientConnection.Mode.SILENT);
 	}
 
-	public FtpServer(Socket control_socket,long client_id, Connection.Mode mode) throws IOException
+	public FtpServer(Socket control_socket,long client_id, ClientConnection.Mode mode) throws IOException
 	{
 		this.mode=mode;
 		this.control_socket=control_socket;
@@ -304,7 +304,7 @@ public class FtpServer
 	 * @param str the string to log (show in the standard output or write to a file.
 	 * @param lvl the level of importance.
 	 */
-	private void log(String str,Connection.Mode lvl) throws IOException
+	private void log(String str,ClientConnection.Mode lvl) throws IOException
 	{
 		DateFormat timeFormat = new SimpleDateFormat("[HH:mm:ss] ");
 
