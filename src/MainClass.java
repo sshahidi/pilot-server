@@ -17,8 +17,10 @@ public class MainClass {
 	public static void main(String[] args) {
 		//loading the default values.
 		port=9876;
-		ClientConnection.ServiceType servicetype=ClientConnection.ServiceType.ECHO_SERVER;
-		ClientConnection.Mode mode=ClientConnection.Mode.VERBOSE;
+		//for now we just have phone server.
+		ClientConnection.ServiceType servicetype=ClientConnection.ServiceType.PHONE_SERVER;
+		Slog.Mode log_filter=Slog.Mode.VERBOSE;
+		Slog.Output log_output = Slog.Output.STDOUT;
 		
 		//Parsing the input arguments
 		try
@@ -28,17 +30,22 @@ public class MainClass {
 			if (args.length>=2)
 				servicetype = ClientConnection.ServiceType.valueOf(args[1]);
 			if (args.length>=3)
-				mode = ClientConnection.Mode.valueOf(args[2]);
+				log_filter = Slog.Mode.valueOf(args[2]);
+			if (args.length>=4)
+				log_output = Slog.Output.valueOf(args[3]);
 		}
 		catch (Exception e) {
 			System.out.println("Wrong input arguments.");
-			System.out.println("Usage:\r\n>>java MainClass [port number] [servic type] [mode] ");
-			System.out.println("\r\nService type can be: {ECHO_SERVER, FTP_SERVER,ARQ_SERVER,CC_SERVER,ROUTING_SERVER,PROJECT_SERVER}");
-			System.out.println("\r\nMode can be: {VERBOSE,SILENT,LOG,LOGVERBOSE}");
+			System.out.println("Usage:\r\n>>java MainClass [port number] [servic type] [log filter][log output] ");
+			System.out.println("\r\nService type can be just: {PHONE_SERVER} for now");
+			System.out.println("\r\nLog filter can be: {VERBOSE,DEBUG,INFO,WEARNING,ERROR}");
+			System.out.println("\r\nlog output can be: {STDOUT,NETWORK,FILE}");
+			
 			return;
 		}
 		
 		//initialization and variable definitions.
+		Slog log=new Slog(log_filter,log_output); //for logging
 		ServerSocket ss;
 		long request_num=1; //the number of the client being connected to the server.
 		
@@ -52,11 +59,13 @@ public class MainClass {
 		
 		
 		try {
+			
+			System.out.println("Server loading... Logger status: \n"+log.toString());
 			ss=new ServerSocket(port);
-			System.out.println("Server online.\nHost name: "+InetAddress.getLocalHost().getHostName()+"\nHost Address: "+InetAddress.getLocalHost().getHostAddress()+":"+port+ "\nwaiting for requests.");
+			log.i("Server online.\nHost name: "+InetAddress.getLocalHost().getHostName()+"\nHost Address: "+InetAddress.getLocalHost().getHostAddress()+":"+port+ "\nwaiting for requests.");
 		} catch (IOException e) {
+			log.e("could not open the server socket on the given port: "+args[0]+". Server ended.");
 			e.printStackTrace();
-			System.out.println("could not open the server socket on the given port: "+args[0]+". Server ended.");
 			return;
 		}
 		
@@ -65,9 +74,9 @@ public class MainClass {
 			try
 			{
 				Socket socket=ss.accept();
-				System.out.println("request received. request number: " + request_num + " client: "+ socket.getRemoteSocketAddress().toString());
+				log.i("request received. request number: " + request_num + " client: "+ socket.getRemoteSocketAddress().toString());
 				
-				ClientConnection connection=new ClientConnection(socket,servicetype,mode,request_num);
+				ClientConnection connection=new ClientConnection(socket,servicetype,request_num,log_filter,log_output);
 				Thread thread=new Thread(connection); //the thread object that will handle each client using the connection class.
 				thread.start();
 				request_num++;
