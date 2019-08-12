@@ -45,6 +45,7 @@ public class ClientConnection implements Runnable {
 			handleClient();
 		} catch (Exception e) {
 			log.w("connection to client: "+CLIENT_ID+" ended unexpectedly.");
+			//log.d("Exception mesage: "+e.getMessage());
 			log.printStackTrace(e, Slog.Mode.DEBUG);
 		}
 	}

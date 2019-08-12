@@ -2,6 +2,7 @@ import java.io.BufferedReader;
 import java.io.DataOutputStream;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.lang.reflect.Array;
 import java.net.Socket;
 import java.sql.Connection;
 import java.sql.DriverManager;
@@ -9,22 +10,25 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.ArrayList;
+import java.util.Arrays;
 
 import org.json.simple.JSONArray;
 import org.json.simple.JSONObject;
 import org.json.simple.parser.JSONParser;
+
+import com.mysql.jdbc.Statement;
 
 
 public class PhoneServer {
 
 	public enum JsonKeys{
 		/* aps */mac(00),ssid(01),frequency(02),capabilities(11),date_created(21),date_modified(31),visit_count(10),last_visit(41),
-		/* rps */rp_id(20),rp_name(51),rp_type(61),latitude(04),longitude(14),altitude(24),accuracy(34),floor_number(12),creator_id(30),floor_id(40),
-		/* aprp */rss(03),
-		/* events */ event_id(50),start_date(71),end_date(81),start_time(91),end_time(101),event_title(111),short_info(121),long_info(131),media_id(05),
+		/* rps */rp_id(20),rp_name(51),rp_type(61),latitude(05),longitude(15),altitude(25),accuracy(35),floor_number(03),creator_id(30),floor_id(40),
+		/* aprp */rss(04),
+		/* events */ event_id(50),start_date(71),end_date(81),start_time(91),end_time(101),event_title(111),short_info(121),long_info(131),media_id(06),
 		/* users */ user_id(60),user_name(141),passwd(151),email(161),first_name(171),last_name(181),birth_date(191),
-		/* control keys */ command_type(201),local_mac(70),response_type(221),error_code(231),message(241),aps(06);
-		/* data types: long(%10=0) String(%10=1) int(%10=2) byte(%10=3) double (%10=4) inputStream(%10=5) JSONarray (%10=6)*/
+		/* control keys */ command_type(201),local_mac(70),response_type(221),error_code(231),message(241),aps(07);
+		/* data types: long(%10=0) String(%10=1) int(%10=2) short(%10=3) byte(%10=04) double (%10=5) inputStream(%10=6) JSONarray (%10=7)*/
 		private final int id;
 		JsonKeys(int id) {this.id=id;}
 		public JsonKeysTypes getKeyType()
@@ -34,7 +38,7 @@ public class PhoneServer {
 	}
 
 	public enum JsonKeysTypes{
-		longType,StringType,intType,byteType, doubleType, inputStreamType
+		longType,StringType,intType,shortType, byteType, doubleType, inputStreamType, JSONArrayType
 	}
 	public enum CommandType{
 		Add_Manual_RP,Add_Auto_RP,Remove_RP,
@@ -60,7 +64,7 @@ public class PhoneServer {
 	public enum ErrorCode{Insufficient_Arguments,RP_Not_Found,RP_already_exists,
 		RP_protected,No_Common_AP_Found,Event_Not_Found,
 		Event_Already_exists,Event_protected,Unknown_Error,
-		Localization_Error,Insufficient_Privilages;
+		Localization_Error,Insufficient_Privilages, DB_Error;
 	/*private final int id;
 		COMMAND_TYPE(int id) { this.id = id; }
 		public int getValue() { return id; }*/
@@ -98,6 +102,7 @@ public class PhoneServer {
 	///////////////Public methods:
 
 
+	@SuppressWarnings("unchecked")
 	public void start() throws Exception
 	{
 		writeline("HELLO WELOCME to Pilot Server. Service type: PHONE_SERVER");
@@ -109,7 +114,7 @@ public class PhoneServer {
 			JSONObject json= (JSONObject) jparser.parse(str); //new JSONObject();
 			log.d("whole json object: " + json.toString());
 			//Type Local MAC Address(String)		Name (String)	AP_Numbers(int)	Latitude(float)	Longitude(float)	Floor_Number(int)	MAC1(String)	RSS1(int)	SSID1 (String:32-bytes)	Frequency1 (int)	Capabilites1 (String:32-bytes)
-			CommandType command_type= (CommandType) json.get(JsonKeys.command_type.toString());
+			CommandType command_type= CommandType.valueOf( (String) json.get(JsonKeys.command_type.toString()));
 			JSONObject jresponse=new JSONObject();
 			switch(command_type)
 			{
@@ -146,8 +151,8 @@ public class PhoneServer {
 				break;
 			default:
 				//JSONObject jresponse=new JSONObject();
-				jresponse.put(JsonKeys.response_type.toString(), ResponseType.Error);
-				jresponse.put(JsonKeys.message.toString(), (String)("Unsupported request code received: "+command_type));
+				jresponse.put(JsonKeys.response_type.toString(), ResponseType.Error.toString());
+				jresponse.put(JsonKeys.message.toString(), (String)("Unsupported request code received: "+command_type.toString()));
 				writeline(jresponse.toJSONString());
 			}
 			if(str.equalsIgnoreCase("quit"))
@@ -173,29 +178,30 @@ public class PhoneServer {
 	@SuppressWarnings("unchecked")
 	private JSONObject addRereferencePoint(JSONObject json) throws IOException,SQLException
 	{
+		log.d("Add reference point entry...");
 		JSONObject jresponse=new JSONObject();
 		/*
 		 * Type-1	Local MAC Address(String)		Name (String)	AP_Numbers(int)	Latitude(float)	Longitude(float)	Floor_Number(int)	MAC1(String)	RSS1(int)	SSID1 (String:32-bytes)	Frequency1 (int)	Capabilites1 (String:32-bytes)	...
 		 */
-		long user_mac= json.containsKey(JsonKeys.local_mac.toString())? (Long)json.get(JsonKeys.local_mac.toString()):0;
+		long user_mac= json.containsKey(JsonKeys.local_mac.toString())? ((Number)json.get(JsonKeys.local_mac.toString())).longValue():0;
 		String user_name=json.containsKey(JsonKeys.user_name.toString() ) ? (String) json.get(JsonKeys.user_name.toString()):"";
-		long id=json.containsKey(JsonKeys.user_id.toString()) ? (Long) json.get(JsonKeys.user_id.toString()):0;
+		long id=json.containsKey(JsonKeys.user_id.toString()) ? ((Number) json.get(JsonKeys.user_id.toString())).longValue():0;
 		//TODO: we should make sure username and user id belong to the same person and belong to the same person who has logged in.
 
 		//for now, if the location is not known, we can't add the RP.
 		if(!json.containsKey(JsonKeys.latitude.toString()) || !json.containsKey(JsonKeys.longitude.toString()) )
 		{
 			log.e("lat/long is not contained in the json.");
-			jresponse.put(JsonKeys.response_type.toString(), ResponseType.Error);
-			jresponse.put(JsonKeys.error_code.toString(), ErrorCode.Insufficient_Arguments);
+			jresponse.put(JsonKeys.response_type.toString(), ResponseType.Error.toString());
+			jresponse.put(JsonKeys.error_code.toString(), ErrorCode.Insufficient_Arguments.toString());
 			jresponse.put(JsonKeys.message.toString(), "The resquented RP could not be added since it does not have a (valid) lat/long.");
 			return jresponse;
 		}
 
-		double lat= (Double)json.get(JsonKeys.latitude.toString());
-		double lon= (Double)json.get(JsonKeys.longitude.toString());
-		short floor=json.containsKey(JsonKeys.floor_number.toString())? (Short) json.get(JsonKeys.floor_number.toString()):0; //default value is 0
-		double accuracy= json.containsKey(JsonKeys.accuracy.toString())?  (Double) json.get(JsonKeys.accuracy.toString()):Double.NaN; //default value is NaN
+		double lat= ((Number)json.get(JsonKeys.latitude.toString())).doubleValue();
+		double lon= ((Number)json.get(JsonKeys.longitude.toString())).doubleValue();
+		short floor=json.containsKey(JsonKeys.floor_number.toString())? ((Number) json.get(JsonKeys.floor_number.toString())).shortValue():0; //default value is 0
+		double accuracy= json.containsKey(JsonKeys.accuracy.toString())?  ((Number) json.get(JsonKeys.accuracy.toString())).doubleValue():Double.NaN; //default value is NaN
 
 
 		//checking with DB if we should update or we should create.
@@ -240,8 +246,9 @@ public class PhoneServer {
 
 		if (closest_rp_id!=0) //a close point existed before. its an update.
 		{
+			log.d("neighbour point exists. updating the closest point instead of inserting...");
 			json.put(JsonKeys.rp_id.toString(), closest_rp_id);
-			json.put(JsonKeys.command_type.toString(), CommandType.Update_RP);
+			json.put(JsonKeys.command_type.toString(), CommandType.Update_RP.toString());
 			return updateReferencePoint(json);
 
 		}
@@ -251,7 +258,7 @@ public class PhoneServer {
 			JsonKeys[] args=new JsonKeys[] {JsonKeys.rp_name,JsonKeys.rp_type,JsonKeys.latitude,JsonKeys.longitude,JsonKeys.accuracy,JsonKeys.floor_number,JsonKeys.creator_id,JsonKeys.date_modified,JsonKeys.floor_id};//"visit_count","no_aps"};
 			String query_begin ="INSERT INTO rps (";//name, rp_type,latitude, longitude, accuracy, floor_number, creator_id,date_modified,visit_count,no_aps)"
 			String query_end =  " values ( "; //?, ?, ?,?,?,?,?,?,?,?)";
-			ArrayList<String> values=new ArrayList<>();
+			ArrayList<Object> values=new ArrayList<>();
 			ArrayList<JsonKeysTypes> column_types=new ArrayList<>();
 			for(int i=0;i<args.length;i++)
 			{
@@ -260,7 +267,7 @@ public class PhoneServer {
 					query_begin+=args[i].toString()+", ";
 					query_end+="?, ";
 					column_types.add(args[i].getKeyType());
-					values.add((String)json.get(args[i]));
+					values.add(json.get(args[i].toString()));
 				}
 			}
 
@@ -268,13 +275,13 @@ public class PhoneServer {
 			rs = manipulate(query_begin.substring(0, query_begin.length()-2)+") "+query_end.substring(0, query_end.length()-2)+")",column_types,values);
 			if(rs==null || rs.next()==false)
 			{
-				jresponse.put(JsonKeys.response_type.toString(), ResponseType.Error);
-				jresponse.put(JsonKeys.error_code.toString(), ErrorCode.Unknown_Error);
+				jresponse.put(JsonKeys.response_type.toString(), ResponseType.Error.toString());
+				jresponse.put(JsonKeys.error_code.toString(), ErrorCode.DB_Error.toString());
 				jresponse.put(JsonKeys.message.toString(), "The database did not return a valid RP_id after insertion. RP insertaion failed.");
 				return jresponse;
 			}
-			long rp_id = rs.getLong(JsonKeys.rp_id.toString());
-			jresponse.put(JsonKeys.response_type.toString(), ResponseType.Manual_RP_Added);
+			long rp_id = rs.getLong(1);
+			jresponse.put(JsonKeys.response_type.toString(), ResponseType.Manual_RP_Added.toString());
 			jresponse.put(JsonKeys.rp_id.toString(), rp_id);
 
 
@@ -282,7 +289,7 @@ public class PhoneServer {
 			//int ap_numbers = (Integer)json.get("ap_numbers");
 			JSONArray aps= (JSONArray) json.get(JsonKeys.aps.toString());
 			String sql_query1="INSERT INTO aps (MAC,ssid,frequency,capabilities,date_modified) VALUES(?,?,?,?, CURRENT_TIMESTAMP)ON DUPLICATE KEY UPDATE ssid=?, frequency = ?, capabilities = ?, date_modified= CURRENT_TIMESTAMP";
-			String sql_query2=" INSERT INTO aprp (RP_id,MAC,rss) VALUES(?,?,? )";
+			String sql_query2=" INSERT INTO aprp (RP_id,MAC,rss,date_modified) VALUES(?,?,?, CURRENT_TIMESTAMP ) ON DUPLICATE KEY UPDATE rss= ?";
 			PreparedStatement preparedStmt_aps = db_conn.prepareStatement(sql_query1);
 			PreparedStatement preparedStmt_aprps = db_conn.prepareStatement(sql_query2);
 			//fetching the aps and their info
@@ -292,15 +299,15 @@ public class PhoneServer {
 				if(!obj.containsKey(JsonKeys.mac.toString()) || !obj.containsKey(JsonKeys.frequency.toString()) || ! obj.containsKey(JsonKeys.capabilities.toString()))
 				{
 					log.e("mac address is not contained in the json.");
-					jresponse.put(JsonKeys.response_type.toString(), ResponseType.Error);
-					jresponse.put(JsonKeys.error_code.toString(), ErrorCode.Insufficient_Arguments);
+					jresponse.put(JsonKeys.response_type.toString(), ResponseType.Error.toString());
+					jresponse.put(JsonKeys.error_code.toString(), ErrorCode.Insufficient_Arguments.toString());
 					jresponse.put(JsonKeys.message.toString(), "At least one of the resquented APs could not be added since it did not have a (valid) MAC address or frequency or capabilities field.");
 					return jresponse;
 				}
-				long ap_mac= obj.containsKey(JsonKeys.mac.toString())? (Long)obj.get(JsonKeys.mac.toString()):0;
-				short rss =  obj.containsKey(JsonKeys.rss.toString())? 	(Short) obj.get(JsonKeys.rss.toString()):-128;
+				long ap_mac= obj.containsKey(JsonKeys.mac.toString())? ((Number)obj.get(JsonKeys.mac.toString())).longValue():0;
+				byte rss =  obj.containsKey(JsonKeys.rss.toString())? 	((Number) obj.get(JsonKeys.rss.toString())).byteValue():-128;
 				String ssid =  obj.containsKey(JsonKeys.ssid.toString())? (String) obj.get(JsonKeys.ssid.toString()):"";
-				int freq=  obj.containsKey(JsonKeys.frequency.toString())? (Integer) obj.get(JsonKeys.frequency.toString()):0;
+				int freq=  obj.containsKey(JsonKeys.frequency.toString())? ((Number) obj.get(JsonKeys.frequency.toString())).intValue():0;
 				String capabilities =  obj.containsKey(JsonKeys.capabilities.toString())? (String) obj.get(JsonKeys.capabilities.toString()):"";
 
 				preparedStmt_aps.setLong(1, ap_mac);
@@ -314,13 +321,14 @@ public class PhoneServer {
 
 				preparedStmt_aprps.setLong(1, rp_id);
 				preparedStmt_aprps.setLong(2, ap_mac);
-				preparedStmt_aprps.setInt(3, rss);
+				preparedStmt_aprps.setByte(3, rss);
+				preparedStmt_aprps.setByte(4, rss);
 				preparedStmt_aprps.addBatch();
 			}
 			int[] res=preparedStmt_aps.executeBatch();
-			log.d("insertion to aps result: "+res);
+			log.d("insertion to aps result: "+Arrays.toString(res));
 			preparedStmt_aprps.executeBatch();
-			log.d("insertion to aprp result: "+res);
+			log.d("insertion to aprp result: "+ Arrays.toString(res));
 			return jresponse;
 		}
 	}
@@ -334,42 +342,43 @@ public class PhoneServer {
 	@SuppressWarnings("unchecked")
 	private JSONObject updateReferencePoint(JSONObject json) throws IOException,SQLException
 	{
+		log.d("Update reference point entry...");
 		JSONObject jresponse=new JSONObject();
-		long user_mac= json.containsKey(JsonKeys.local_mac.toString())? (Long)json.get(JsonKeys.local_mac.toString()):0;
+		long user_mac= json.containsKey(JsonKeys.local_mac.toString())? ((Number)json.get(JsonKeys.local_mac.toString())).longValue():0;
 		String user_name=json.containsKey(JsonKeys.user_name.toString() ) ? (String) json.get(JsonKeys.user_name.toString()):"";
-		long id=json.containsKey(JsonKeys.user_id.toString()) ? (Long) json.get(JsonKeys.user_id.toString()):0;
+		long id=json.containsKey(JsonKeys.user_id.toString()) ? ((Number) json.get(JsonKeys.user_id.toString())).longValue():0;
 		//TODO: we should make sure username and user id belong to the same person and belong to the same person who has logged in.
 
 		//for now, if the location is not known, we can't add the RP.
 		if(!json.containsKey(JsonKeys.rp_id.toString()  ))
 		{
 			log.e("rp_id is not contained in the json.");
-			jresponse.put(JsonKeys.response_type.toString(), ResponseType.Error);
-			jresponse.put(JsonKeys.error_code.toString(), ErrorCode.Insufficient_Arguments);
+			jresponse.put(JsonKeys.response_type.toString(), ResponseType.Error.toString());
+			jresponse.put(JsonKeys.error_code.toString(), ErrorCode.Insufficient_Arguments.toString());
 			jresponse.put(JsonKeys.message.toString(), "The resquented RP could not be updated since it does not have a (valid) rp_id.");
 			return jresponse;
 		}
 
-		long rp_id=(Long) json.get(JsonKeys.rp_id.toString());
-		double lat= json.containsKey(JsonKeys.latitude.toString())? (Double)json.get(JsonKeys.latitude.toString()):Double.NaN;
-		double lon= json.containsKey(JsonKeys.longitude.toString())?(Double)json.get(JsonKeys.longitude.toString()):Double.NaN;
-		short floor=json.containsKey(JsonKeys.floor_number.toString())? (Short) json.get(JsonKeys.floor_number.toString()):0; //default value is 0
-		double accuracy= json.containsKey(JsonKeys.accuracy.toString())?  (Double) json.get(JsonKeys.accuracy.toString()):Double.NaN; //default value is NaN
+		long rp_id=((Number) json.get(JsonKeys.rp_id.toString())).longValue();
+		double lat= json.containsKey(JsonKeys.latitude.toString())? ((Number)json.get(JsonKeys.latitude.toString())).doubleValue():Double.NaN;
+		double lon= json.containsKey(JsonKeys.longitude.toString())? ((Number)json.get(JsonKeys.longitude.toString())).doubleValue():Double.NaN;
+		short floor=json.containsKey(JsonKeys.floor_number.toString())? ((Number) json.get(JsonKeys.floor_number.toString())).shortValue():0; //default value is 0
+		double accuracy= json.containsKey(JsonKeys.accuracy.toString())?  ((Number) json.get(JsonKeys.accuracy.toString())).doubleValue():Double.NaN; //default value is NaN
 
 		// UPDATE rps  SET name='test2',rp_type=1,latitude=11,longitude=12,accuracy=10,floor_number=null,creator_id=2,date_modified=CURRENT_TIMESTAMP,floor_id=2 WHERE rp_id=1;
 		JsonKeys[] args=new JsonKeys[] {JsonKeys.rp_name,JsonKeys.rp_type,JsonKeys.latitude,JsonKeys.longitude,JsonKeys.accuracy,JsonKeys.floor_number,JsonKeys.creator_id,JsonKeys.date_modified,JsonKeys.floor_id};//"visit_count","no_aps"};
 		String query_begin ="UPDATE rps SET ";//name, rp_type,latitude, longitude, accuracy, floor_number, creator_id,date_modified,visit_count,no_aps)"
 		String query_end =  "date_modified=CURRENT_TIMESTAMP WHERE rp_id= "+rp_id;
-		ArrayList<String> values=new ArrayList<>();
+		ArrayList<Object> values=new ArrayList<>();
 		ArrayList<JsonKeysTypes> column_types=new ArrayList<>();
 		for(int i=0;i<args.length;i++)
 		{
 			if(json.containsKey(args[i].toString()))
 			{
-				query_begin+=args[i].toString()+"= ";
-				query_end+="?, ";
+				query_begin+=args[i].toString()+"= ?, ";
+				//query_end+="?, ";
 				column_types.add(args[i].getKeyType());
-				values.add((String)json.get(args[i]));
+				values.add(json.get(args[i].toString()));
 			}
 		}
 
@@ -389,12 +398,12 @@ public class PhoneServer {
 		ResultSet rs = manipulate(query_begin+query_end,column_types,values);
 		if(rs==null)
 		{
-			jresponse.put(JsonKeys.response_type.toString(), ResponseType.Error);
-			jresponse.put(JsonKeys.error_code.toString(), ErrorCode.Unknown_Error);
+			jresponse.put(JsonKeys.response_type.toString(), ResponseType.Error.toString());
+			jresponse.put(JsonKeys.error_code.toString(), ErrorCode.DB_Error.toString());
 			jresponse.put(JsonKeys.message.toString(), "The database did not return a valid RP_id after insertion. RP insertaion failed.");
 			return jresponse;
 		}
-		jresponse.put(JsonKeys.response_type.toString(), ResponseType.RP_Updated);
+		jresponse.put(JsonKeys.response_type.toString(), ResponseType.RP_Updated.toString());
 		jresponse.put(JsonKeys.rp_id.toString(), rp_id);
 
 
@@ -402,7 +411,7 @@ public class PhoneServer {
 		//int ap_numbers = (Integer)json.get("ap_numbers");
 		JSONArray aps= (JSONArray) json.get(JsonKeys.aps.toString());
 		String sql_query1="INSERT INTO aps (MAC,ssid,frequency,capabilities,date_modified) VALUES(?,?,?,?, CURRENT_TIMESTAMP)ON DUPLICATE KEY UPDATE ssid=?, frequency = ?, capabilities = ?, date_modified= CURRENT_TIMESTAMP";
-		String sql_query2=" INSERT INTO aprp (RP_id,MAC,rss) VALUES(?,?,? )";
+		String sql_query2=" INSERT INTO aprp (RP_id,MAC,rss,date_modified) VALUES(?,?,?, CURRENT_TIMESTAMP ) ON DUPLICATE KEY UPDATE rss= ?";
 		PreparedStatement preparedStmt_aps = db_conn.prepareStatement(sql_query1);
 		PreparedStatement preparedStmt_aprps = db_conn.prepareStatement(sql_query2);
 		//fetching the aps and their info
@@ -411,15 +420,16 @@ public class PhoneServer {
 			JSONObject obj= (JSONObject) aps.get(i);
 			if(!obj.containsKey(JsonKeys.mac.toString()) || !obj.containsKey(JsonKeys.frequency.toString()) || ! obj.containsKey(JsonKeys.capabilities.toString()))
 			{
-				jresponse.put(JsonKeys.response_type.toString(), ResponseType.Error);
-				jresponse.put(JsonKeys.error_code.toString(), ErrorCode.Insufficient_Arguments);
+				log.e("mac address is not contained in the json.");
+				jresponse.put(JsonKeys.response_type.toString(), ResponseType.Error.toString());
+				jresponse.put(JsonKeys.error_code.toString(), ErrorCode.Insufficient_Arguments.toString());
 				jresponse.put(JsonKeys.message.toString(), "At least one of the resquented APs could not be added since it did not have a (valid) MAC address or frequency or capabilities field.");
 				return jresponse;
 			}
-			long ap_mac= obj.containsKey(JsonKeys.mac.toString())? (Long)obj.get(JsonKeys.mac.toString()):0;
-			short rss =  obj.containsKey(JsonKeys.rss.toString())? 	(Short) obj.get(JsonKeys.rss.toString()):-128;
+			long ap_mac= obj.containsKey(JsonKeys.mac.toString())? ((Number)obj.get(JsonKeys.mac.toString())).longValue():0;
+			byte rss =  obj.containsKey(JsonKeys.rss.toString())? 	((Number) obj.get(JsonKeys.rss.toString())).byteValue():-128;
 			String ssid =  obj.containsKey(JsonKeys.ssid.toString())? (String) obj.get(JsonKeys.ssid.toString()):"";
-			int freq=  obj.containsKey(JsonKeys.frequency.toString())? (Integer) obj.get(JsonKeys.frequency.toString()):0;
+			int freq=  obj.containsKey(JsonKeys.frequency.toString())? ((Number) obj.get(JsonKeys.frequency.toString())).intValue():0;
 			String capabilities =  obj.containsKey(JsonKeys.capabilities.toString())? (String) obj.get(JsonKeys.capabilities.toString()):"";
 
 			preparedStmt_aps.setLong(1, ap_mac);
@@ -433,14 +443,14 @@ public class PhoneServer {
 
 			preparedStmt_aprps.setLong(1, rp_id);
 			preparedStmt_aprps.setLong(2, ap_mac);
-			preparedStmt_aprps.setInt(3, rss);
+			preparedStmt_aprps.setByte(3, rss);
+			preparedStmt_aprps.setByte(4, rss);
 			preparedStmt_aprps.addBatch();
 		}
 		int[] res=preparedStmt_aps.executeBatch();
-		log.d("insertion to aps result: "+res);
+		log.d("insertion to aps result: "+Arrays.toString(res));
 		preparedStmt_aprps.executeBatch();
-		log.d("insertion to aprp result: "+res);
-		log.d("returning statement: "+jresponse.toJSONString());
+		log.d("insertion to aprp result: "+ Arrays.toString(res));
 		return jresponse;
 
 	}
@@ -448,10 +458,11 @@ public class PhoneServer {
 	@SuppressWarnings("unchecked")
 	private JSONObject localize(JSONObject json) throws SQLException
 	{
+		log.d("Localize entry...");
 		JSONObject jresponse=new JSONObject();		
-		long user_mac= json.containsKey(JsonKeys.local_mac.toString())? (Long)json.get(JsonKeys.local_mac.toString()):0;
+		long user_mac= json.containsKey(JsonKeys.local_mac.toString())? ((Number)json.get(JsonKeys.local_mac.toString())).longValue():0;
 		String user_name=json.containsKey(JsonKeys.user_name.toString() ) ? (String) json.get(JsonKeys.user_name.toString()):"";
-		long id=json.containsKey(JsonKeys.user_id.toString()) ? (Long) json.get(JsonKeys.user_id.toString()):0;
+		long id=json.containsKey(JsonKeys.user_id.toString()) ? ((Number) json.get(JsonKeys.user_id.toString())).longValue():0;
 		//TODO: we should make sure username and user id belong to the same person and belong to the same person who has logged in.
 		
 		//connecting to db if necessary
@@ -473,28 +484,28 @@ public class PhoneServer {
 			JSONObject obj=(JSONObject) aps.get(i);
 			if(!obj.containsKey(JsonKeys.mac.toString()) )
 			{
-				jresponse.put(JsonKeys.response_type.toString(), ResponseType.Error);
-				jresponse.put(JsonKeys.error_code.toString(), ErrorCode.Insufficient_Arguments);
+				jresponse.put(JsonKeys.response_type.toString(), ResponseType.Error.toString());
+				jresponse.put(JsonKeys.error_code.toString(), ErrorCode.Insufficient_Arguments.toString());
 				jresponse.put(JsonKeys.message.toString(), "At least one of the resquented APs could not be added since it did not have a (valid) MAC address.");
 				return jresponse;
 			}
-			long mac= (Long)obj.get(JsonKeys.mac.toString());
+			long mac= ((Number)obj.get(JsonKeys.mac.toString())).longValue();
 			//for now we don't care about rss!
-			//short rss= (Short) obj.get(JsonKeys.rss.toString());
+			//byte rss= ((Number) obj.get(JsonKeys.rss.toString())).byteValue();
 			macs+= mac+(i < aps.size()-1? ", ":"");
 		}
 		
 		String query_str="SELECT rps.latitude, rps.longitude, rps.floor_number, aprp.rp_id, COUNT(MAC) AS NumberOfAPs"+ 
-                     "FROM (aprp INNER JOIN rps ON aprp.rp_id = rps.rp_id)"+
-                     "WHERE MAC IN ("+ macs+" )"+
-                     "GROUP BY rp_id"+
-                     "ORDER BY NumberOfAPs DESC;";
+                     " FROM (aprp INNER JOIN rps ON aprp.rp_id = rps.rp_id)"+
+                     " WHERE MAC IN ("+ macs+" )"+
+                     " GROUP BY rp_id"+
+                     " ORDER BY NumberOfAPs DESC";
 		ResultSet rs=query(query_str);
 		if(rs==null)
 		{
 			log.e("DB query failed. couldn't find location");
-			jresponse.put(JsonKeys.response_type.toString(), ResponseType.Error);
-			jresponse.put(JsonKeys.error_code.toString(), ErrorCode.Unknown_Error);
+			jresponse.put(JsonKeys.response_type.toString(), ResponseType.Error.toString());
+			jresponse.put(JsonKeys.error_code.toString(), ErrorCode.DB_Error.toString());
 			jresponse.put(JsonKeys.message.toString(), "Could not locate the user. DB query failed");
 			return jresponse;
 		}
@@ -507,6 +518,7 @@ public class PhoneServer {
 		double lon = rs.getDouble("longitude");
 		short floor = rs.getShort("floor_number");
 		long rp_id= rs.getLong("RP_id");
+		jresponse.put(JsonKeys.response_type.toString(), ResponseType.Location.toString());
 		jresponse.put(JsonKeys.latitude.toString(), lat);
 		jresponse.put(JsonKeys.longitude.toString(), lon);
 		jresponse.put(JsonKeys.floor_number.toString(), floor);
@@ -525,11 +537,11 @@ public class PhoneServer {
 		try {
 			//TODO: this shouldn't be hardcoded!
 			Class.forName("com.mysql.jdbc.Driver");
-			String url = "jdbc:mysql://173.194.246.47:3306";//?user=root"; 
-			Connection conn = DriverManager.getConnection(url,"shervin","123456");
+			String url = "jdbc:mysql://173.194.247.241:3306";//?user=root"; 
+			db_conn = DriverManager.getConnection(url,"shervin","123456");
 			//by default using the location db when stablishing connection
-			ResultSet rs = conn.createStatement().executeQuery("use LOC_DB"); 
-			return conn;
+			ResultSet rs = db_conn.createStatement().executeQuery("use loc_db"); 
+			return db_conn;
 		} catch (ClassNotFoundException | SQLException e) {
 			log.e("Serving client "+CLIENT_ID+": could not connect to db.");
 			log.printStackTrace(e,Slog.Mode.DEBUG);
@@ -567,7 +579,7 @@ public class PhoneServer {
 	 * @return a {@link com.mysql.jdbc.ResultSet} containing the auto_generated_keys. If no auto generated keys are returned, result set will be empty. 
 	 * If a problem happens in the call, <code>null</code> is returned.
 	 */
-	private ResultSet manipulate(String query_str,ArrayList<JsonKeysTypes> column_types, ArrayList<String> values)
+	private ResultSet manipulate(String query_str,ArrayList<JsonKeysTypes> column_types, ArrayList<Object> values)
 	{
 		log.d("calling a prepared statement. qurey_str: "+query_str);
 		try
@@ -578,25 +590,28 @@ public class PhoneServer {
 
 
 			// create the mysql insert preparedstatement
-			PreparedStatement preparedStmt = db_conn.prepareStatement(query);
+			PreparedStatement preparedStmt = db_conn.prepareStatement(query,PreparedStatement.RETURN_GENERATED_KEYS);
 			for(int i=0;i<values.size();i++)
 			{
 				switch (column_types.get(i))
 				{
 				case StringType:
-					preparedStmt.setString (i+1, values.get(i));
+					preparedStmt.setString (i+1, (String)values.get(i));
 					break;
 				case longType:
-					preparedStmt.setLong(i+1, Long.parseLong(values.get(i)));
+					preparedStmt.setLong(i+1, ((Number)values.get(i)).longValue());
 					break;
 				case doubleType:
-					preparedStmt.setDouble(i+1, Double.parseDouble(values.get(i)));
+					preparedStmt.setDouble(i+1, ((Number)values.get(i)).doubleValue());
 					break;
 				case byteType:
-					preparedStmt.setByte(i+1, Byte.parseByte(values.get(i)));
+					preparedStmt.setByte(i+1, ((Number)values.get(i)).byteValue());
 					break;
 				case intType:
-					preparedStmt.setInt(i+1, Integer.parseInt(values.get(i)));
+					preparedStmt.setInt(i+1, ((Number)(values.get(i))).intValue());
+					break;
+				case shortType:
+					preparedStmt.setShort(i+1, ((Number)(values.get(i))).shortValue());
 					break;
 					//not implelmented for now.	
 					//case inputStreamType:
@@ -607,8 +622,9 @@ public class PhoneServer {
 				}
 			}
 			// execute the preparedstatement
-			preparedStmt.execute();
-			//rs = stmt.executeQuery("SELECT LAST_INSERT_ID()");
+			log.d("final prepared statement: "+ preparedStmt.toString());
+			preparedStmt.executeUpdate();
+			
 			return preparedStmt.getGeneratedKeys();
 		}
 		catch(Exception e)
